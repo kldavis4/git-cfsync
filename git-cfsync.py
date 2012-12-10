@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import os
 import shlex
 import subprocess
@@ -18,6 +19,8 @@ class CfGitRepository(object):
     '''
     def __init__(self, repopath):
         'Initialize the environment for running git commands'
+        self.log = logging.getLogger('CfGitRepository')
+        self.log.debug('Initialized logger')
         os.chdir(repopath)
         self._gather_sync_config()
 
@@ -29,31 +32,59 @@ class CfGitRepository(object):
         all known configuration values into self.config.
         '''
         config = {}
-        for key in ('fetch',):
-            config[key] = self._git('config --get-all cfsync.' + key).split()
+        for key in ('fetch', 'merge', 'pull'):
+            try:
+                config[key] = self._git('config --get-all cfsync.' + key)\
+                                  .strip('\n').split('\n')
+                self.log.debug('setting %s config to: %s', key, repr(config[key]))
+            except subprocess.CalledProcessError:
+                config[key] = None
         self.config = config
 
     def _git(self, cmdstr):
-        return subprocess.check_output(['git',] + shlex.split(cmdstr))
+        cmd = ['git',] + shlex.split(cmdstr)
+        self.log.debug("Running git command: %s", repr(cmd))
+        return subprocess.check_output(cmd, universal_newlines=True)
+
+    def _run_git_generic(self, subcmd_str):
+        'Run a git command in a completely not-special way'
+        for subcmd_target in self.config[subcmd_str]:
+            self._git(subcmd_str + ' ' + subcmd_target)
 
     def run_periodic_tasks(self):
         'Perform tasks that should run periodically'
-        pass
+        for command in ('fetch', 'pull', 'merge'):
+            if self.config[command]:
+                self._run_git_generic(command)
 
 def parse_arguments():
     'Parse arguments from command line invocation'
     parser = argparse.ArgumentParser(prog='git-cfsync')
     parser.add_argument('repopath', metavar='PATH',
                         help="path to git repository")
-    parser.add_argument('-V', action='version', version='0.1')
+    parser.add_argument('-d', '--debug', action='store_const',
+                        const=logging.DEBUG, dest='loglevel',
+                        help="Enable debug messages")
+    parser.add_argument('-v', '--verbose', action='store_const',
+                        const=logging.INFO, dest='loglevel',
+                        help="Enable verbose logging")
+    parser.add_argument('-V', '--version', action='version', version='0.1')
     return parser.parse_args()
 
 def main():
     args = parse_arguments()
-    cfgit = CfGitRepository(args.repopath)
+    if args.loglevel:
+        logging.getLogger().setLevel(args.loglevel)
+        logging.debug("Set logging level")
+
+    try:
+        cfgit = CfGitRepository(args.repopath)
+        cfgit.run_periodic_tasks()
+    except Exception as e:
+        if args.loglevel == logging.DEBUG:
+            raise e
+        else:
+            print('Error:', e, file=sys.stderr)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print('Error:', e, file=sys.stderr)
+    main()
