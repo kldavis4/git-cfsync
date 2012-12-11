@@ -7,6 +7,8 @@ import shlex
 import subprocess
 import sys
 
+VERSION='0.1'
+
 class CfGitRepository(object):
     '''A Git repository used for storing configuration files
 
@@ -68,7 +70,7 @@ def parse_arguments():
     parser.add_argument('-v', '--verbose', action='store_const',
                         const=logging.INFO, dest='loglevel',
                         help="Enable verbose logging")
-    parser.add_argument('-V', '--version', action='version', version='0.1')
+    parser.add_argument('-V', '--version', action='version', version=VERSION)
     return parser.parse_args()
 
 def main():
