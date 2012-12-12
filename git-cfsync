@@ -35,11 +35,12 @@ class CfGitRepository(object):
     Note: This object will run system commands, alter the environment and
     change directories.  Beware.
     '''
-    def __init__(self, repopath):
+    def __init__(self, repopath=None):
         'Initialize the environment for running git commands'
         self.log = logging.getLogger('CfGitRepository')
         self.log.debug('Initialized logger')
-        os.chdir(repopath)
+        if repopath:
+            os.chdir(repopath)
         self._gather_sync_config()
 
     def _gather_sync_config(self):
@@ -78,7 +79,7 @@ class CfGitRepository(object):
 def parse_arguments():
     'Parse arguments from command line invocation'
     parser = argparse.ArgumentParser(prog='git-cfsync')
-    parser.add_argument('repopath', metavar='PATH',
+    parser.add_argument('repopath', metavar='PATH', nargs='?',
                         help="path to git repository")
     parser.add_argument('-d', '--debug', action='store_const',
                         const=logging.DEBUG, dest='loglevel',
