@@ -69,6 +69,11 @@ class CfGitRepository(object):
         self.log.debug("Running git command: %s", repr(cmd))
         return subprocess.check_output(cmd, universal_newlines=True)
 
+    def _run_git_fetch(self):
+        "Run the appropriate git fetches on the current repo"
+        for remote in self.config['fetch']:
+            self._git('fetch --quiet ' + remote)
+
     def _run_git_generic(self, subcmd_str):
         'Run a git command in a completely not-special way'
         for subcmd_target in self.config[subcmd_str]:
@@ -88,9 +93,9 @@ class CfGitRepository(object):
     def run_periodic_tasks(self):
         'Perform tasks that should run periodically'
         # Run git commands
-        for command in ('fetch', 'pull', 'merge'):
-            if self.config[command]:
-                self._run_git_generic(command)
+        self._run_git_fetch()
+        for command in ('pull', 'merge'):
+            self._run_git_generic(command)
 
         # Conditionally do things based on what happened
         cur_head = self._git('describe --always').strip()
