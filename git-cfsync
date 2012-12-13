@@ -123,7 +123,7 @@ def main():
     args = parse_arguments()
     if args.loglevel:
         logging.getLogger().setLevel(args.loglevel)
-        logging.debug("Set logging level")
+        logging.debug("git-cfsync version %s", VERSION)
 
     try:
         cfgit = CfGitRepository(args.repopath)
