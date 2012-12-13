@@ -38,9 +38,12 @@ class CfGitRepository(object):
     def __init__(self, repopath=None):
         'Initialize the environment for running git commands'
         self.log = logging.getLogger('CfGitRepository')
-        self.log.debug('Initialized logger')
         if repopath:
             os.chdir(repopath)
+
+        # Gather ye info
+        self.initial_head = self._git('describe --always').strip()
+        self.log.debug('Setting initial_head to %s', self.initial_head)
         self._gather_sync_config()
 
     def _gather_sync_config(self):
@@ -51,13 +54,14 @@ class CfGitRepository(object):
         all known configuration values into self.config.
         '''
         config = {}
-        for key in ('fetch', 'merge', 'pull'):
+        for key in ('fetch', 'merge', 'options', 'pull', 'reload'):
             try:
                 config[key] = self._git('config --get-all cfsync.' + key)\
                                   .strip('\n').split('\n')
                 self.log.debug('setting %s config to: %s', key, repr(config[key]))
             except subprocess.CalledProcessError:
-                config[key] = None
+                config[key] = []
+
         self.config = config
 
     def _git(self, cmdstr):
@@ -70,11 +74,31 @@ class CfGitRepository(object):
         for subcmd_target in self.config[subcmd_str]:
             self._git(subcmd_str + ' ' + subcmd_target)
 
+    def _run_reload(self):
+        'Do something if this repository has changed'
+        for reload_command in self.config['reload']:
+            self.log.info("Running reload command: %s", reload_command)
+            try:
+                subprocess.check_call(reload_command, shell=True,
+                                      universal_newlines=True)
+            except subprocess.CalledProcessError as e:
+                logging.error("Reload command failed, aborting immediately.")
+                raise e
+
     def run_periodic_tasks(self):
         'Perform tasks that should run periodically'
+        # Run git commands
         for command in ('fetch', 'pull', 'merge'):
             if self.config[command]:
                 self._run_git_generic(command)
+
+        # Conditionally do things based on what happened
+        cur_head = self._git('describe --always').strip()
+        if (cur_head != self.initial_head or 
+            'always_reload' in self.config['options']):
+            self.log.info("Repository state has changed (%s -> %s)",
+                          self.initial_head, cur_head)
+            self._run_reload()
 
 def parse_arguments():
     'Parse arguments from command line invocation'
